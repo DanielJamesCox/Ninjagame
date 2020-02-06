@@ -21,6 +21,7 @@ public class PlayerStateMachine : MonoBehaviour {
     [SerializeField]
     bool tapOnPlayer = false; //whether or not a touch began on the player model
 
+    Rigidbody2D body; //reference to rigidbody
     float impactTimer; //once the player hits a surface, they're stopped for a certain amount of time in order to walljump
 	float tapDebounce = 1f; //make the player wait a certain amount of time between touches
 	float momentum; //magnitude of velocity used for impact damage
@@ -33,9 +34,8 @@ public class PlayerStateMachine : MonoBehaviour {
     Animator animrig; //empty reference to animator controller, populated on start
 	GameObject rock; //empty reference to roller rock, find in OnTriggerEnter2D and use in Rock
     float tapTimer = 0f; //count of taps while in Rock
-	float currentSize = 5f; //Current camera size
 	float spriteTimer = 0f; //some sprites take time to come back
-	float deadTimer = 0f;
+	float deadTimer = 0f; //count of time dead, for respawn timing
 	#endregion
 
 	#region PublicVariables
@@ -84,7 +84,8 @@ public class PlayerStateMachine : MonoBehaviour {
 	float hookMaxDistance = 5f;
     #endregion
     #region Cosmetic
-    Color color = Color.white;
+    Color robeColor = Color.white;
+    Color sashColor = Color.white;
 	[SerializeField]
 	Sprite[] playerSprites; //1 for idle, 2 for in_air, 3 and 4 for slash, 5 for hookshot, 6 for rock
 	[SerializeField]
@@ -124,16 +125,16 @@ public class PlayerStateMachine : MonoBehaviour {
 	}
 
 	void InAir(){
-		momentum = gameObject.GetComponent<Rigidbody2D> ().velocity.magnitude;
+		momentum = body.velocity.magnitude;
         GetComponent<Rigidbody2D>().freezeRotation = false;
 		Move ();
 	}
 
 	void Walking(){
 		Move ();
-        Vector2 vel = GetComponent<Rigidbody2D>().velocity;
+        Vector2 vel = body.velocity;
         //GetComponent<Rigidbody2D>().velocity = new Vector2(Vector2.Distance(targetA, targetB)/3, vel.y);
-        GetComponent<Rigidbody2D>().velocity = transform.right * (targetB.x - targetA.x)/2;
+        body.velocity = transform.right * (targetB.x - targetA.x)/2;
     }
 
     void Slash(){
@@ -357,7 +358,7 @@ public class PlayerStateMachine : MonoBehaviour {
 						joint.distance = hookDistance;
 				}
 				if (Mathf.Abs(Input.GetTouch (0).deltaPosition.x) > 0) {
-					GetComponent<Rigidbody2D> ().AddForce (Input.GetTouch (0).deltaPosition.normalized * 20);
+					body.AddForce (Input.GetTouch (0).deltaPosition.normalized * 20);
 				}
 				break;
 			case TouchPhase.Ended:
@@ -376,9 +377,9 @@ public class PlayerStateMachine : MonoBehaviour {
 	}
 
 	void Jump(Vector2 targ, float strength){
-        GetComponent<Rigidbody2D>().freezeRotation = false;
+        body.freezeRotation = false;
         pointer.transform.LookAt (new Vector3 (targ.x, targ.y, pointer.transform.position.z));
-		GetComponent<Rigidbody2D> ().AddForce (pointer.transform.forward * strength);
+		body.AddForce (pointer.transform.forward * strength);
 		SetCurrentState (ControlState.IN_AIR);
         float difference = pointer.transform.forward.x * -1;
         if (difference >= 0){
@@ -440,6 +441,7 @@ public class PlayerStateMachine : MonoBehaviour {
 
 	// Use this for initialization
 	void Start () {
+        body = GetComponent<Rigidbody2D>();
 		joint = GetComponent<DistanceJoint2D> ();
 		joint.enabled = false;
 		joint.distance = hookDistance;
@@ -514,12 +516,12 @@ public class PlayerStateMachine : MonoBehaviour {
 	void OnTriggerStay2D(Collider2D other){
 		if (curState != ControlState.HOOKSHOT && curState != ControlState.ROCK && (other.isTrigger == false || other.tag == "StillWater")) {
 			SetCurrentState (ControlState.IDLE);
-			GetComponent<Rigidbody2D> ().drag = 1.5f;
+			body.drag = 1.5f;
 		}
 	}
 	void OnTriggerExit2D(Collider2D other){
 		if (curState != ControlState.HOOKSHOT && (other.isTrigger == false || other.tag == "StillWater" || other.tag == "RunningWater")) {
-			GetComponent<Rigidbody2D> ().drag = 0f;
+			body.drag = 0f;
             SetCurrentState(ControlState.IN_AIR);
 		}
 	}
@@ -560,21 +562,16 @@ public class PlayerStateMachine : MonoBehaviour {
 
         //check health
         float remainingHealth = (float)health / maxHealth;
-        ninjaRobe.GetComponent<SpriteRenderer>().color = new Color(color.r + ((1 - color.r) - ((1 - color.r) * remainingHealth)), color.g - (color.g - color.g * remainingHealth), color.b - (color.b - color.b * remainingHealth), color.a);
-        /*if (health >= 51 && ninjaRobe.GetComponent<SpriteRenderer>().color == Color.magenta)
-            ninjaRobe.GetComponent<SpriteRenderer>().color = Color.white;
-        if (health > 0 && health <= 50){
-			ninjaRobe.GetComponent<SpriteRenderer>().color = Color.magenta;
-		}
-		if (health <= 0 && !isDead) {
-            //freeze player input and run death sequence
-            ninjaRobe.GetComponent<SpriteRenderer>().color = Color.black;
-			isDead = true;
-		}*/
-		
+        //recolor character
+        ninjaRobe.color = new Color(robeColor.r + ((1 - robeColor.r) - ((1 - robeColor.r) * remainingHealth)), 
+                                    robeColor.g - (robeColor.g - robeColor.g * remainingHealth), 
+                                    robeColor.b - (robeColor.b - robeColor.b * remainingHealth), robeColor.a);
+        sash.color = new Color(sashColor.r + ((1 - sashColor.r) - ((1 - sashColor.r) * remainingHealth)),
+                                    sashColor.g - (sashColor.g - sashColor.g * remainingHealth),
+                                    sashColor.b - (sashColor.b - sashColor.b * remainingHealth), sashColor.a);
 
-		//render rope
-		if(rope.enabled){
+        //render rope
+        if (rope.enabled){
 			rope.positionCount = ropeTargets.Count+1;
 			for (int i = 0; i < ropeTargets.Count; i++) {
 				rope.SetPosition (i, ropeTargets [i]);
@@ -585,7 +582,7 @@ public class PlayerStateMachine : MonoBehaviour {
 		//check impact timer
 		impactTimer += Time.deltaTime;
 		if(impactTimer > 1){
-			gameObject.GetComponent<Rigidbody2D> ().WakeUp ();
+			body.WakeUp ();
 		}
 
 		tapDebounce += Time.deltaTime;
