@@ -40,6 +40,26 @@ public class SaveManager : MonoBehaviour {
         DontDestroyOnLoad(this);
     }
 
+    public void setStarCount(int index, int value)
+    {
+        starCount[index] = value;
+    }
+
+    public void setLevelTime(int index, float value)
+    {
+        levelTime[index] = value;
+    }
+
+    public void setUnlockCollected(int index, bool value)
+    {
+        unlockCollected[index] = value;
+    }
+
+    public void setUnhurt(int index, bool value)
+    {
+        unhurt[index] = value;
+    }
+
     public void Save() {
 
     }
